@@ -5,6 +5,7 @@
     <link rel="stylesheet" href="style.css">
     <title>P2P Chat avec PeerJS</title>
     <link rel="stylesheet" href="style.css" />
+    
   </head>
 
   <body>
@@ -18,6 +19,10 @@
 
       <hr />
 
+      <label>Choose your pseudo: </label><input type="text" id="pseudo" placeholder="Pseudo *" required />
+
+      <hr />
+
       <h3>Rooms</h3>
       <div id="room-list">Loading rooms...</div>
       <button class="validation" onclick="createRoom()">Generate a room</button>
@@ -26,6 +31,7 @@
 
       <h3>Chat</h3>
       
+      <!-- Container pour TOUTES les vidéos - AU-DESSUS DU CHAT -->
       <div id="remote-videos-container" style="display: none;">
         <h4>Live Videos</h4>
         <div id="remote-videos"></div>
@@ -39,7 +45,6 @@
 
       <div id="chat-form">
         <div class="inputs">
-          <input type="text" id="pseudo" placeholder="Pseudo *" required />
           <input type="text" id="msg" placeholder="Message *" required />
         </div>
         <div class="action-buttons">
@@ -124,7 +129,7 @@
 
         const videoInfo = document.createElement('div');
         videoInfo.className = 'video-info';
-        videoInfo.textContent = userPseudo ;
+        videoInfo.textContent = userPseudo;
 
         const videoElement = document.createElement('video');
         videoElement.id = `video-${peer.id}`;

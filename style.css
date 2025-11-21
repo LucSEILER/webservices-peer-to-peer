@@ -89,34 +89,7 @@ textarea {
   gap: 1rem;
 }
 
-body {
-        font-family: sans-serif;
-        margin: 20px;
-      }
-      #messages {
-        border: 1px solid #000;
-        height: 250px;
-        overflow: auto;
-        padding: 6px;
-        margin-bottom: 10px;
-      }
-      #messages img {
-        max-width: 100%;
-        max-height: 120px;
-        border: 1px solid #ccc;
-        border-radius: 5px;
-        margin-top: 5px;
-      }
-      #pseudo,
-      #msg {
-        width: 150px;
-      }
-      #room-list button {
-        margin: 2px 0;
-      }
-      
-      /* Styles pour les vidéos partagées - AU-DESSUS DU CHAT */
-      #remote-videos-container {
+#remote-videos-container {
         margin-bottom: 20px;
         padding: 10px;
         border: 1px solid #ddd;
@@ -157,7 +130,6 @@ body {
         margin: 10px 0;
       }
       
-      /* Style spécial pour notre propre vidéo */
       .own-video {
         border-left: 4px solid #2196F3;
       }
