@@ -3,35 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <title>P2P Chat avec PeerJS</title>
-    <style>
-      body {
-        font-family: sans-serif;
-        margin: 20px;
-      }
-      #messages {
-        border: 1px solid #000;
-        height: 250px;
-        overflow: auto;
-        padding: 6px;
-        margin-bottom: 10px;
-      }
-      #messages img {
-        max-width: 100%;
-        max-height: 120px;
-        border: 1px solid #ccc;
-        border-radius: 5px;
-        margin-top: 5px;
-      }
-      #pseudo,
-      #msg {
-        width: 150px;
-      }
-      #room-list button {
-        margin: 2px 0;
-      }
-    </style>
     <link rel="stylesheet" href="style.css" />
   </head>
+
   <body>
     <div class="content">
       <h1>P2P Chat</h1>
@@ -53,11 +27,14 @@
 
       <hr />
 
-      <h3>Chat</h3>
+      <h3>Live Chat</h3>
       <div id="messages"></div>
 
       <h3>Send Room Message</h3>
-      <input type="text" id="msg" placeholder="Message *" required />
+      <div id="chat-form">
+      <div class="inputs">
+        <input type="text" id="msg" placeholder="Message *" required />
+      </div>
       <button class="validation" id="send-btn">Send</button>
       <button class="validation" id="send-img-btn">📷 Image</button>
       <input
@@ -66,6 +43,7 @@
         accept="image/*"
         style="display: none"
       />
+      </div>
 
       <h3>Send Private Message</h3>
       <input type="text" id="pm-user-id" placeholder="User ID *" />
@@ -156,7 +134,10 @@
       }
 
       function setupClient(c) {
-        c.on("open", () => addMessage("Connected to the room!"));
+        c.on("open", () => {
+            console.log("Connected to host", c.peer);
+            addMessage("Connected to the room!")
+        });
         c.on("data", (data) => {
           if (!data) return;
           if (data.type === "image") {
@@ -165,7 +146,7 @@
             addMessage(data.pseudo + " : " + data.message);
           }
         });
-        c.on("close", () => addMessage("DDisconnected from the room"));
+        c.on("close", () => addMessage("Disconnected from the room"));
       }
 
       document.getElementById("send-btn").onclick = () => {
