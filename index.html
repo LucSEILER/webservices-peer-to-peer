@@ -46,7 +46,10 @@
       </div>
 
       <h3>Send Private Message</h3>
-      <input type="text" id="pm-user-id" placeholder="User ID *" />
+      <div class="pm-row">
+        <input type="text" id="pm-user-id" placeholder="User ID *" />
+        <button class="validation" onclick="toggleBlockUser()">Block / Unblock</button>
+      </div>
       <input type="text" id="pm-msg" placeholder="Message *" />
       <button class="validation" onclick="sendPM()">Send PM</button>
       <button class="validation" onclick="sendPImages()">📷 Image</button>
@@ -224,10 +227,15 @@
       }
 
       let pmConnections = {};
+      let blockedUsers = new Set();
 
       function sendPM() {
         const pseudo = document.getElementById("pseudo").value.trim();
         const targetId = document.getElementById("pm-user-id").value.trim();
+        if (blockedUsers.has(targetId)) {
+          addMessage("[System] Impossible d’envoyer : utilisateur bloqué.");
+          return;
+        }
         const message = document.getElementById("pm-msg").value.trim();
 
         if (!pseudo || !targetId || !message) {
@@ -266,6 +274,7 @@
 
       peer.on("connection", (c) => {
         c.on("data", (data) => {
+          if (blockedUsers.has(c.peer)) return;
           if (data.type === "pm") {
             addMessage("[Private] " + data.pseudo + " : " + data.message);
           }
@@ -335,6 +344,19 @@
         };
 
         fileInput.click();
+      }
+
+      function toggleBlockUser() {
+        const targetId = document.getElementById("pm-user-id").value.trim();
+        if (!targetId) return alert("User ID manquant");
+
+        if (blockedUsers.has(targetId)) {
+          blockedUsers.delete(targetId);
+          addMessage("[System] " + targetId + " débloqué");
+        } else {
+          blockedUsers.add(targetId);
+          addMessage("[System] " + targetId + " bloqué");
+        }
       }
 
       function addPrivateImage(pseudo, message, base64) {

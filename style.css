@@ -11,6 +11,14 @@ body {
   margin-bottom: 1rem;
 }
 
+.pm-row {
+  display: flex;
+  gap: 8px;
+  align-items: center; 
+  flex-wrap: nowrap; 
+  margin: 6px 0;
+}
+
 #messages img {
   max-width: 100%;
   max-height: 120px;
