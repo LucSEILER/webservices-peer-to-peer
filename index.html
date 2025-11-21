@@ -30,27 +30,39 @@
         margin: 2px 0;
       }
     </style>
+    <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <h2>My ID:</h2>
-    <p id="my-id"></p>
+    <div class="content">
+      <h1>P2P Chat</h1>
 
-    <hr />
+      <div id="userId">
+        <h2>My User ID:</h2>
+        <p id="my-id"></p>
+      </div>
 
-    <h3>Rooms</h3>
-    <div id="room-list">Chargement des rooms...</div>
-    <button onclick="createRoom()">Créer une room</button>
+      <hr />
 
-    <hr />
+      <h3>Rooms</h3>
+      <div id="room-list">Loading rooms...</div>
+      <button class="validation" onclick="createRoom()">Generate a room</button>
 
-    <h3>Chat</h3>
-    <div id="messages"></div>
+      <hr />
 
-    <input type="text" id="pseudo" placeholder="Pseudo *" required />
-    <input type="text" id="msg" placeholder="Message *" required />
-    <button id="send-btn">Send</button>
-    <button id="send-img-btn">📷 Image</button>
-    <input type="file" id="img-input" accept="image/*" style="display: none" />
+      <h3>Chat</h3>
+      <div id="messages"></div>
+
+      <input type="text" id="pseudo" placeholder="Pseudo *" required />
+      <input type="text" id="msg" placeholder="Message *" required />
+      <button class="validation" id="send-btn">Send</button>
+      <button class="validation" id="send-img-btn">📷 Image</button>
+      <input
+        type="file"
+        id="img-input"
+        accept="image/*"
+        style="display: none"
+      />
+    </div>
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script>
@@ -61,17 +73,16 @@
 
       peer.on("open", (id) => {
         document.getElementById("my-id").textContent = id;
-        listRooms(); // liste des rooms au démarrage
-        setInterval(listRooms, 10000); // rafraîchissement toutes les 10s
+        listRooms();
+        setInterval(listRooms, 10000);
       });
 
       async function createRoom() {
         isHost = true;
-        const roomName = prompt("Nom de la room ?");
+        const roomName = prompt("Room name ?");
         if (!roomName) return;
-        addMessage("Room créée ! Partagez cet ID: " + peer.id);
+        addMessage("Room created! Share this ID: " + peer.id);
 
-        // enregistrer la room sur le mini serveur
         await fetch("http://localhost:3000/rooms", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -88,7 +99,7 @@
         roomListDiv.innerHTML = "";
 
         if (rooms.length === 0) {
-          roomListDiv.innerHTML = "<p>Aucune room active</p>";
+          roomListDiv.innerHTML = "<p>No active rooms</p>";
           return;
         }
 
@@ -136,7 +147,7 @@
       }
 
       function setupClient(c) {
-        c.on("open", () => addMessage("Connecté à la room !"));
+        c.on("open", () => addMessage("Connected to the room!"));
         c.on("data", (data) => {
           if (!data) return;
           if (data.type === "image") {
@@ -145,14 +156,14 @@
             addMessage(data.pseudo + " : " + data.message);
           }
         });
-        c.on("close", () => addMessage("Déconnecté de la room"));
+        c.on("close", () => addMessage("DDisconnected from the room"));
       }
 
       document.getElementById("send-btn").onclick = () => {
         const pseudo = document.getElementById("pseudo").value.trim();
         const msg = document.getElementById("msg").value.trim();
         if (!pseudo || !msg) {
-          alert("Pseudo et message obligatoires");
+          alert("Pseudo and message are required");
           return;
         }
 
@@ -172,7 +183,7 @@
       document.getElementById("send-img-btn").onclick = () => {
         const pseudo = document.getElementById("pseudo").value.trim();
         if (!pseudo) {
-          alert("Pseudo obligatoire");
+          alert("Pseudo is required");
           return;
         }
         imgInput.click();
