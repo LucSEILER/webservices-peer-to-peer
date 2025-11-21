@@ -4,7 +4,9 @@
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="style.css">
     <title>P2P Chat avec PeerJS</title>
+    <link rel="stylesheet" href="style.css" />
   </head>
+
   <body>
     <div class="content">
       <h1>P2P Chat</h1>
@@ -32,14 +34,26 @@
         </div>
       </div>
 
+      <h3>Live Chat</h3>
       <div id="messages"></div>
 
-      <input type="text" id="pseudo" placeholder="Pseudo *" required />
-      <input type="text" id="msg" placeholder="Message *" required />
-      <button class="validation" id="send-btn">Send</button>
-      <button class="validation" id="send-img-btn">📷 Image</button>
-      <input type="file" id="img-input" accept="image/*" style="display: none" />
-      <button class="validation" id="start-video">📹 Start Video</button>
+      <div id="chat-form">
+        <div class="inputs">
+          <input type="text" id="pseudo" placeholder="Pseudo *" required />
+          <input type="text" id="msg" placeholder="Message *" required />
+        </div>
+        <div class="action-buttons">
+          <button class="validation" id="send-btn">Send</button>
+          <button class="validation" id="send-img-btn">📷 Image</button>
+          <input
+            type="file"
+            id="img-input"
+            accept="image/*"
+            style="display: none"
+          />
+          <button class="validation" id="start-video">📹 Start Video</button>
+        </div>
+      </div>
     </div>
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -110,7 +124,7 @@
 
         const videoInfo = document.createElement('div');
         videoInfo.className = 'video-info';
-        videoInfo.textContent = userPseudo + " (You)";
+        videoInfo.textContent = userPseudo ;
 
         const videoElement = document.createElement('video');
         videoElement.id = `video-${peer.id}`;
@@ -332,6 +346,7 @@
 
       function setupClient(c) {
         c.on('open', () => {
+          console.log("Connected to host", c.peer);
           addMessage("Connected to the room!");
           const pseudo = document.getElementById("pseudo").value.trim() || "Anonymous";
           c.send({ type: "userInfo", pseudo: pseudo, userId: peer.id });
