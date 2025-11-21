@@ -2,9 +2,32 @@
 <html>
   <head>
     <meta charset="UTF-8" />
-    <title>P2P Chat With PeerJS Signaling Server</title>
+    <title>P2P Chat avec PeerJS</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 20px;
+      }
+      #messages {
+        border: 1px solid #000;
+        height: 250px;
+        overflow: auto;
+        padding: 6px;
+        margin-bottom: 10px;
+      }
+      #messages img {
+        max-width: 100%;
+        max-height: 120px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        margin-top: 5px;
+      }
+      #pseudo,
+      #msg {
+        width: 150px;
+      }
+    </style>
   </head>
-
   <body>
     <h2>My ID:</h2>
     <p id="my-id"></p>
@@ -23,28 +46,17 @@
     <hr />
 
     <h3>Chat</h3>
-    <div
-      id="messages"
-      style="
-        border: 1px solid #000;
-        height: 200px;
-        overflow: auto;
-        padding: 6px;
-      "
-    ></div>
+    <div id="messages"></div>
 
-    <input id="msg" placeholder="Message" />
+    <input type="text" id="pseudo" placeholder="Pseudo *" required />
+    <input type="text" id="msg" placeholder="Message *" required />
     <button id="send-btn">Send</button>
+    <button id="send-img-btn">📷 Image</button>
+    <input type="file" id="img-input" accept="image/*" style="display: none" />
 
-    <!-- PeerJS -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-
     <script>
-      const peer = new Peer({
-        host: "localhost",
-        port: 9000,
-        path: "/peerjs",
-      });
+      const peer = new Peer({ host: "localhost", port: 9000, path: "/peerjs" });
       let isHost = false;
       let conn = null;
       let members = {};
@@ -55,29 +67,61 @@
 
       document.getElementById("create-room-btn").onclick = async () => {
         isHost = true;
+        const roomName = prompt("Nom de la room ?");
         addMessage("Room created! Share this ID: " + peer.id);
 
         await fetch("http://localhost:3000/rooms", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: peer.id }),
+          body: JSON.stringify({ id: peer.id, name: roomName }),
         });
+      };
+
+      // --- Join Room ---
+      document.getElementById("join-room-btn").onclick = () => {
+        const hostId = document.getElementById("join-room-id").value.trim();
+        if (!hostId) return;
+        conn = peer.connect(hostId);
+        setupClient(conn);
+      };
+
+      // --- List Rooms ---
+      document.getElementById("list-rooms-btn").onclick = async () => {
+        const res = await fetch("http://localhost:3000/rooms");
+        const rooms = await res.json();
+        console.log(rooms);
+        // if (rooms.length === 0) return alert("Aucune room active");
+
+        // let msg = "Rooms actives:\n";
+        // rooms.forEach((r,i)=> msg += `${i+1}. ${r.name} (ID: ${r.id})\n`);
+        // const choice = prompt(msg + "\nTapez le numéro de la room à rejoindre :");
+        // if (!choice) return;
+        // const room = rooms[parseInt(choice)-1];
+        // if (!room) return;
+        // conn = peer.connect(room.id);
+        // setupClient(conn);
       };
 
       peer.on("connection", (c) => {
         if (!isHost) return;
-
         members[c.peer] = c;
         addMessage("User joined: " + c.peer);
-
         setupHost(c);
       });
 
       function setupHost(c) {
         c.on("data", (data) => {
-          addMessage(data.from + ": " + data.msg);
+          if (!data) return;
 
-          broadcast(c.peer, data.msg);
+          if (data.type === "image") {
+            addImage(data.pseudo, data.message, data.data);
+          } else {
+            addMessage(data.pseudo + " : " + data.message);
+          }
+          // broadcast à tous sauf l'envoyeur
+          for (let id in members) {
+            if (id !== c.peer) members[id].send(data);
+          }
         });
 
         c.on("close", () => {
@@ -86,40 +130,72 @@
         });
       }
 
-      function broadcast(senderId, msg) {
-        for (let id in members) {
-          if (id !== senderId) {
-            members[id].send({ from: senderId, msg });
-          }
-        }
-      }
-
-      document.getElementById("join-room-btn").onclick = () => {
-        const hostId = document.getElementById("join-room-id").value;
-        conn = peer.connect(hostId);
-        setupClient(conn);
-      };
-
       function setupClient(c) {
         c.on("open", () => addMessage("Connected to room!"));
-
         c.on("data", (data) => {
-          addMessage(data.from + ": " + data.msg);
+          if (!data) return;
+          if (data.type === "image") {
+            addImage(data.pseudo, data.message, data.data);
+          } else {
+            addMessage(data.pseudo + " : " + data.message);
+          }
         });
       }
 
       document.getElementById("send-btn").onclick = () => {
-        const text = document.getElementById("msg").value;
-        if (!text.trim()) return;
-
-        if (isHost) {
-          broadcast(peer.id, text);
-        } else if (conn) {
-          conn.send({ from: peer.id, msg: text });
+        const pseudo = document.getElementById("pseudo").value.trim();
+        const msg = document.getElementById("msg").value.trim();
+        if (!pseudo || !msg) {
+          alert("Pseudo et message obligatoires");
+          return;
         }
 
-        addMessage("Me: " + text);
+        const data = { type: "text", pseudo, message: msg };
+
+        if (isHost) {
+          // broadcast à tous les clients
+          for (let id in members) members[id].send(data);
+          addMessage(pseudo + " : " + msg);
+        } else if (conn) {
+          conn.send(data);
+          addMessage(pseudo + " : " + msg);
+        }
+
         document.getElementById("msg").value = "";
+      };
+
+      const imgInput = document.getElementById("img-input");
+      document.getElementById("send-img-btn").onclick = () => {
+        const pseudo = document.getElementById("pseudo").value.trim();
+        if (!pseudo) {
+          alert("Pseudo obligatoire");
+          return;
+        }
+        imgInput.click();
+      };
+
+      imgInput.onchange = () => {
+        const file = imgInput.files[0];
+        if (!file) return;
+
+        const pseudo = document.getElementById("pseudo").value.trim();
+        const message = document.getElementById("msg").value.trim();
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          const data = { type: "image", pseudo, message, data: reader.result };
+          if (isHost) {
+            for (let id in members) members[id].send(data);
+            addImage(pseudo, message, reader.result);
+          } else if (conn) {
+            conn.send(data);
+            addImage(pseudo, message, reader.result);
+          }
+
+          imgInput.value = "";
+          document.getElementById("msg").value = "";
+        };
+        reader.readAsDataURL(file);
       };
 
       function addMessage(text) {
@@ -128,26 +204,20 @@
         div.scrollTop = div.scrollHeight;
       }
 
-      async function listRooms() {
-        const res = await fetch("http://localhost:3000/rooms");
-        const rooms = await res.json();
+      function addImage(pseudo, message, base64) {
+        const div = document.getElementById("messages");
+        const container = document.createElement("div");
+        container.style.marginBottom = "10px";
+        if (message)
+          container.innerHTML = pseudo + " : " + message + "<br>";
+        else container.innerHTML = pseudo + " :<br>";
 
-        console.log("Rooms:", rooms);
-        // let msg = "Rooms actives:\n";
-        // rooms.forEach((r, i) => (msg += `${i + 1}. ${r.name} (ID: ${r.id})\n`));
-        // const choice = prompt(
-        //   msg + "\nTapez le numéro de la room à rejoindre :"
-        // );
-        // if (!choice) return;
-
-        // const room = rooms[parseInt(choice) - 1];
-        // if (!room) return;
-
-        // conn = peer.connect(room.id);
-        // setupClient(conn);
+        const img = document.createElement("img");
+        img.src = base64;
+        container.appendChild(img);
+        div.appendChild(container);
+        div.scrollTop = div.scrollHeight;
       }
-
-      document.getElementById("list-rooms-btn").onclick = listRooms;
     </script>
   </body>
 </html>
