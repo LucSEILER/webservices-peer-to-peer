@@ -1,0 +1,76 @@
+<!-- <!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Chat PeerJS</title>
+  </head>
+  <body>
+    <h2>My ID :</h2>
+    <p id="my-id"></p>
+
+    <h3>Connect to an ID :</h3>
+    <input type="text" id="other-id" placeholder="Other's ID" />
+    <button id="connect-btn">Connect</button>
+
+    <h3>Chat</h3>
+    <div
+      id="messages"
+      style="
+        border: 1px solid #000;
+        height: 150px;
+        overflow: auto;
+        padding: 5px;
+      "
+    ></div>
+
+    <input type="text" id="msg" placeholder="Message" />
+    <button id="send-btn">Send</button>
+
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script>
+      let conn = null;
+
+      const peer = new Peer();
+
+      peer.on("open", (id) => {
+        document.getElementById("my-id").textContent = id;
+      });
+
+      peer.on("connection", (c) => {
+        conn = c;
+        setupConnection();
+      });
+
+      document.getElementById("connect-btn").onclick = () => {
+        const otherId = document.getElementById("other-id").value;
+        conn = peer.connect(otherId);
+        setupConnection();
+      };
+
+      function setupConnection() {
+        conn.on("open", () => {
+          addMessage("Connected !");
+        });
+
+        conn.on("data", (data) => {
+          addMessage("Le Y: " + data);
+        });
+      }
+
+      document.getElementById("send-btn").onclick = () => {
+        const msg = document.getElementById("msg").value;
+        if (conn && msg.trim() !== "") {
+          conn.send(msg);
+          addMessage("Me: " + msg);
+          document.getElementById("msg").value = "";
+        }
+      };
+
+      function addMessage(text) {
+        const div = document.getElementById("messages");
+        div.innerHTML += text + "<br>";
+        div.scrollTop = div.scrollHeight;
+      }
+    </script>
+  </body>
+</html> -->

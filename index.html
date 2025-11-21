@@ -1,155 +1,201 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="UTF-8" />
-    <title>Chat PeerJS</title>
-  </head>
-  <body>
-    <h2>My ID :</h2>
-    <p id="my-id"></p>
+<head>
+  <meta charset="UTF-8" />
+  <title>P2P Chat avec PeerJS</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    #messages { border: 1px solid #000; height: 250px; overflow: auto; padding: 6px; margin-bottom: 10px; }
+    #messages img { max-width: 100%; max-height: 120px; border: 1px solid #ccc; border-radius: 5px; margin-top: 5px; }
+    #pseudo, #msg { width: 150px; }
+    #room-list button { margin: 2px 0; }
+  </style>
+</head>
+<body>
 
-    <h3>Connect to an ID :</h3>
-    <input type="text" id="other-id" placeholder="Other's ID" />
-    <button id="connect-btn">Connect</button>
+<h2>My ID:</h2>
+<p id="my-id"></p>
 
-    <h3>Chat</h3>
-    <div
-      id="messages"
-      style="
-        border: 1px solid #000;
-        height: 150px;
-        overflow: auto;
-        padding: 5px;
-      "
-    ></div>
+<hr>
 
-    <input type="text" id="pseudo" placeholder="Pseudo *" required/>
+<h3>Rooms</h3>
+<div id="room-list">Chargement des rooms...</div>
+<button onclick="createRoom()">Créer une room</button>
 
-    <input type="text" id="msg" placeholder="Message *" required/>
-    <button id="send-btn">Send</button>
-    <button id="send-img-btn">📷 Image</button>
-    <input type="file" id="img-input" accept="image/*" style="display:none">
+<hr>
 
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <script>
-      let conn = null;
+<h3>Chat</h3>
+<div id="messages"></div>
 
-      const peer = new Peer();
+<input type="text" id="pseudo" placeholder="Pseudo *" required />
+<input type="text" id="msg" placeholder="Message *" required />
+<button id="send-btn">Send</button>
+<button id="send-img-btn">📷 Image</button>
+<input type="file" id="img-input" accept="image/*" style="display: none;" />
 
-      peer.on("open", (id) => {
-        document.getElementById("my-id").textContent = id;
-      });
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script>
+  const peer = new Peer({ host: "localhost", port: 9000, path: "/peerjs" });
+  let isHost = false;
+  let conn = null;
+  let members = {};
 
-      peer.on("connection", (c) => {
-        conn = c;
-        setupConnection();
-      });
+  peer.on("open", (id) => {
+    document.getElementById("my-id").textContent = id;
+    listRooms(); // liste des rooms au démarrage
+    setInterval(listRooms, 10000); // rafraîchissement toutes les 10s
+  });
 
-      document.getElementById("connect-btn").onclick = () => {
-        const otherId = document.getElementById("other-id").value;
-        conn = peer.connect(otherId);
-        setupConnection();
-      };
+  async function createRoom() {
+    isHost = true;
+    const roomName = prompt("Nom de la room ?");
+    if (!roomName) return;
+    addMessage("Room créée ! Partagez cet ID: " + peer.id);
 
-      function setupConnection() {
-        conn.on("open", () => {
-          addMessage("Connected !");
-        });
+    // enregistrer la room sur le mini serveur
+    await fetch("http://localhost:3000/rooms", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({id: peer.id, name: roomName})
+    });
 
-        conn.on("data", (data) => {
-          if (data.type === "image") {
-            addImage(data.pseudo, data.message, data.data);
-          } else {
-            addMessage(data.pseudo + " : " + data.message);
-          }
-        });
+    listRooms();
+  }
+
+  async function listRooms() {
+    const res = await fetch("http://localhost:3000/rooms");
+    const rooms = await res.json();
+    const roomListDiv = document.getElementById("room-list");
+    roomListDiv.innerHTML = "";
+
+    if (rooms.length === 0) {
+      roomListDiv.innerHTML = "<p>Aucune room active</p>";
+      return;
+    }
+
+    rooms.forEach(room => {
+      const btn = document.createElement("button");
+      btn.textContent = room.name + " (" + room.id + ")";
+      btn.onclick = () => joinRoom(room.id);
+      roomListDiv.appendChild(btn);
+    });
+  }
+
+  function joinRoom(id) {
+    if (!id) return;
+    conn = peer.connect(id);
+    setupClient(conn);
+  }
+
+  peer.on("connection", (c) => {
+    if (!isHost) return;
+    members[c.peer] = c;
+    addMessage("User joined: " + c.peer);
+    setupHost(c);
+  });
+
+  function setupHost(c) {
+    c.on("data", (data) => {
+      if (!data) return;
+
+      if (data.type === "image") {
+        addImage(data.pseudo, data.message, data.data);
+      } else {
+        addMessage(data.pseudo + " : " + data.message);
       }
 
-      document.getElementById("send-btn").onclick = () => {
-        const pseudo = document.getElementById("pseudo").value;
-        const msg = document.getElementById("msg").value;
+      // broadcast à tous sauf l'envoyeur
+      for (let id in members) {
+        if (id !== c.peer) members[id].send(data);
+      }
+    });
 
-        if (conn && msg.trim() !== "" && pseudo.trim() !== "") {
-          conn.send({
-            type: "text",
-            pseudo: pseudo,
-            message: msg
-          });
-          addMessage(pseudo + " : " + msg);
-          document.getElementById("msg").value = "";
-        } else {
-          alert("Veuillez saisir un pseudo et un message");
-        }
-      };
+    c.on("close", () => {
+      delete members[c.peer];
+      addMessage("User left: " + c.peer);
+    });
+  }
 
-      const imgInput = document.getElementById("img-input");
-      document.getElementById("send-img-btn").onclick = () => {
-        const pseudo = document.getElementById("pseudo").value;
-        if (pseudo.trim() === "") {
-          alert("Veuillez saisir un pseudo avant d'envoyer une image");
-          return;
-        }
-        imgInput.click();
-      };
+  function setupClient(c) {
+    c.on("open", () => addMessage("Connecté à la room !"));
+    c.on("data", (data) => {
+      if (!data) return;
+      if (data.type === "image") {
+        addImage(data.pseudo, data.message, data.data);
+      } else {
+        addMessage(data.pseudo + " : " + data.message);
+      }
+    });
+    c.on("close", () => addMessage("Déconnecté de la room"));
+  }
 
-      imgInput.onchange = () => {
-        const file = imgInput.files[0];
-        if (!file || !conn) return;
+  document.getElementById("send-btn").onclick = () => {
+    const pseudo = document.getElementById("pseudo").value.trim();
+    const msg = document.getElementById("msg").value.trim();
+    if (!pseudo || !msg) { alert("Pseudo et message obligatoires"); return; }
 
-        const pseudo = document.getElementById("pseudo").value;
-        const message = document.getElementById("msg").value;
+    const data = { type: "text", pseudo, message: msg };
+    if (isHost) {
+      for (let id in members) members[id].send(data);
+      addMessage(pseudo + " : " + msg);
+    } else if (conn) {
+      conn.send(data);
+      addMessage(pseudo + " : " + msg);
+    }
 
-        if (pseudo.trim() === "") {
-          alert("Veuillez saisir un pseudo avant d'envoyer une image");
-          imgInput.value = "";
-          return;
-        }
+    document.getElementById("msg").value = "";
+  };
 
-        const reader = new FileReader();
-        reader.onload = () => {
-          conn.send({
-            type: "image",
-            pseudo: pseudo,
-            message: message,
-            data: reader.result
-          });
+  const imgInput = document.getElementById("img-input");
+  document.getElementById("send-img-btn").onclick = () => {
+    const pseudo = document.getElementById("pseudo").value.trim();
+    if (!pseudo) { alert("Pseudo obligatoire"); return; }
+    imgInput.click();
+  };
 
-          addImage(pseudo, message, reader.result);
-          
-          imgInput.value = "";
-          document.getElementById("msg").value = "";
-        };
-        reader.readAsDataURL(file);
-      };
+  imgInput.onchange = () => {
+    const file = imgInput.files[0];
+    if (!file) return;
 
-      function addMessage(text) {
-        const div = document.getElementById("messages");
-        div.innerHTML += text + "<br>";
-        div.scrollTop = div.scrollHeight;
+    const pseudo = document.getElementById("pseudo").value.trim();
+    const message = document.getElementById("msg").value.trim();
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const data = { type: "image", pseudo, message, data: reader.result };
+      if (isHost) {
+        for (let id in members) members[id].send(data);
+        addImage(pseudo, message, reader.result);
+      } else if (conn) {
+        conn.send(data);
+        addImage(pseudo, message, reader.result);
       }
 
-      function addImage(pseudo, message, base64) {
-        const div = document.getElementById("messages");
-        const messageContainer = document.createElement("div");
-        messageContainer.style.marginBottom = "10px";
-        if (message && message.trim() !== "") {
-          messageContainer.innerHTML = "<b>" + pseudo + " : " + message + "</b><br>";
-        } else {
-          messageContainer.innerHTML = "<b>" + pseudo + " :</b><br>";
-        }
-        const img = document.createElement("img");
-        img.src = base64;
-        img.style.maxWidth = "100%";
-        img.style.maxHeight = "120px";
-        img.style.marginTop = "5px";
-        img.style.border = "1px solid #ccc";
-        img.style.borderRadius = "5px";
+      imgInput.value = "";
+      document.getElementById("msg").value = "";
+    };
+    reader.readAsDataURL(file);
+  };
 
-        messageContainer.appendChild(img);
-        div.appendChild(messageContainer);
+  function addMessage(text) {
+    const div = document.getElementById("messages");
+    div.innerHTML += text + "<br>";
+    div.scrollTop = div.scrollHeight;
+  }
 
-        div.scrollTop = div.scrollHeight;
-      }
-    </script>
-  </body>
+  function addImage(pseudo, message, base64) {
+    const div = document.getElementById("messages");
+    const container = document.createElement("div");
+    container.style.marginBottom = "10px";
+    if (message) container.innerHTML = pseudo + " : " + message + "<br>";
+    else container.innerHTML = pseudo + " :<br>";
+
+    const img = document.createElement("img");
+    img.src = base64;
+    container.appendChild(img);
+    div.appendChild(container);
+    div.scrollTop = div.scrollHeight;
+  }
+</script>
+</body>
 </html>
