@@ -23,4 +23,10 @@ app.get("/rooms", (req, res) => {
   res.send(rooms);
 });
 
+app.delete("/rooms/:id", (req, res) => {
+  const id = req.params.id;
+  rooms = rooms.filter((r) => r.id !== id);
+  res.send({ success: true });
+});
+
 app.listen(3000, () => console.log("Room server running on port 3000, http://localhost:3000"));
