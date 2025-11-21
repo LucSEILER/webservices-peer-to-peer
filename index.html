@@ -23,8 +23,10 @@
       "
     ></div>
 
-    <input type="text" id="msg" placeholder="Message" />
-    <button id="send-btn">Sen,d</button>
+    <input type="text" id="pseudo" placeholder="Pseudo *" required/>
+
+    <input type="text" id="msg" placeholder="Message *" required/>
+    <button id="send-btn">Send</button>
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script>
@@ -53,15 +55,21 @@
         });
 
         conn.on("data", (data) => {
-          addMessage("Le Y: " + data);
+          console.log(data)
+          addMessage(data.pseudo + " : "+ data.message);
         });
       }
 
       document.getElementById("send-btn").onclick = () => {
+        const pseudo= document.getElementById("pseudo").value;
+        console.log(pseudo)
         const msg = document.getElementById("msg").value;
-        if (conn && msg.trim() !== "") {
-          conn.send(msg);
-          addMessage("Me: " + msg);
+        if (conn && msg.trim() !== "" && pseudo.trim() !== "") {
+          conn.send({
+            pseudo :pseudo,
+            message : msg
+          });
+          addMessage(pseudo + " : "+ msg);
           document.getElementById("msg").value = "";
         }
       };
