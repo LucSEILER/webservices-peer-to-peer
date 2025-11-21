@@ -27,6 +27,8 @@
 
     <input type="text" id="msg" placeholder="Message *" required/>
     <button id="send-btn">Send</button>
+    <button id="send-img-btn">📷 Image</button>
+    <input type="file" id="img-input" accept="image/*" style="display:none">
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script>
@@ -55,28 +57,97 @@
         });
 
         conn.on("data", (data) => {
-          console.log(data)
-          addMessage(data.pseudo + " : "+ data.message);
+          if (data.type === "image") {
+            addImage(data.pseudo, data.message, data.data);
+          } else {
+            addMessage(data.pseudo + " : " + data.message);
+          }
         });
       }
 
       document.getElementById("send-btn").onclick = () => {
-        const pseudo= document.getElementById("pseudo").value;
-        console.log(pseudo)
+        const pseudo = document.getElementById("pseudo").value;
         const msg = document.getElementById("msg").value;
+
         if (conn && msg.trim() !== "" && pseudo.trim() !== "") {
           conn.send({
-            pseudo :pseudo,
-            message : msg
+            type: "text",
+            pseudo: pseudo,
+            message: msg
           });
-          addMessage(pseudo + " : "+ msg);
+          addMessage(pseudo + " : " + msg);
           document.getElementById("msg").value = "";
+        } else {
+          alert("Veuillez saisir un pseudo et un message");
         }
+      };
+
+      const imgInput = document.getElementById("img-input");
+      document.getElementById("send-img-btn").onclick = () => {
+        const pseudo = document.getElementById("pseudo").value;
+        if (pseudo.trim() === "") {
+          alert("Veuillez saisir un pseudo avant d'envoyer une image");
+          return;
+        }
+        imgInput.click();
+      };
+
+      imgInput.onchange = () => {
+        const file = imgInput.files[0];
+        if (!file || !conn) return;
+
+        const pseudo = document.getElementById("pseudo").value;
+        const message = document.getElementById("msg").value;
+
+        if (pseudo.trim() === "") {
+          alert("Veuillez saisir un pseudo avant d'envoyer une image");
+          imgInput.value = "";
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          conn.send({
+            type: "image",
+            pseudo: pseudo,
+            message: message,
+            data: reader.result
+          });
+
+          addImage(pseudo, message, reader.result);
+          
+          imgInput.value = "";
+          document.getElementById("msg").value = "";
+        };
+        reader.readAsDataURL(file);
       };
 
       function addMessage(text) {
         const div = document.getElementById("messages");
         div.innerHTML += text + "<br>";
+        div.scrollTop = div.scrollHeight;
+      }
+
+      function addImage(pseudo, message, base64) {
+        const div = document.getElementById("messages");
+        const messageContainer = document.createElement("div");
+        messageContainer.style.marginBottom = "10px";
+        if (message && message.trim() !== "") {
+          messageContainer.innerHTML = "<b>" + pseudo + " : " + message + "</b><br>";
+        } else {
+          messageContainer.innerHTML = "<b>" + pseudo + " :</b><br>";
+        }
+        const img = document.createElement("img");
+        img.src = base64;
+        img.style.maxWidth = "100%";
+        img.style.maxHeight = "120px";
+        img.style.marginTop = "5px";
+        img.style.border = "1px solid #ccc";
+        img.style.borderRadius = "5px";
+
+        messageContainer.appendChild(img);
+        div.appendChild(messageContainer);
+
         div.scrollTop = div.scrollHeight;
       }
     </script>
