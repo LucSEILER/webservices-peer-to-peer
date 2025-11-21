@@ -1,0 +1,6 @@
+@echo off
+echo Démarrage du serveur PeerJS...
+start cmd /k "peerjs --port 9000 --path /peerjs "
+timeout /t 2
+echo Lancement du serveur Node.js...
+start cmd /k "node .\server.js"
