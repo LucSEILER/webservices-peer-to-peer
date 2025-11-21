@@ -3,8 +3,11 @@
 # Team Members
 
 Brigen B
+
 Yann S
+
 Lilian S
+
 Luc S
 
 ## Start the project
