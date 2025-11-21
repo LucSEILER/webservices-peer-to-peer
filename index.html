@@ -2,35 +2,8 @@
 <html>
   <head>
     <meta charset="UTF-8" />
+    <link rel="stylesheet" href="style.css">
     <title>P2P Chat avec PeerJS</title>
-    <style>
-      body {
-        font-family: sans-serif;
-        margin: 20px;
-      }
-      #messages {
-        border: 1px solid #000;
-        height: 250px;
-        overflow: auto;
-        padding: 6px;
-        margin-bottom: 10px;
-      }
-      #messages img {
-        max-width: 100%;
-        max-height: 120px;
-        border: 1px solid #ccc;
-        border-radius: 5px;
-        margin-top: 5px;
-      }
-      #pseudo,
-      #msg {
-        width: 150px;
-      }
-      #room-list button {
-        margin: 2px 0;
-      }
-    </style>
-    <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <div class="content">
@@ -50,18 +23,23 @@
       <hr />
 
       <h3>Chat</h3>
+      
+      <div id="remote-videos-container" style="display: none;">
+        <h4>Live Videos</h4>
+        <div id="remote-videos"></div>
+        <div class="video-controls">
+          <button class="validation" id="stop-video-btn" style="display: none;" onclick="stopVideo()">Stop My Video</button>
+        </div>
+      </div>
+
       <div id="messages"></div>
 
       <input type="text" id="pseudo" placeholder="Pseudo *" required />
       <input type="text" id="msg" placeholder="Message *" required />
       <button class="validation" id="send-btn">Send</button>
       <button class="validation" id="send-img-btn">📷 Image</button>
-      <input
-        type="file"
-        id="img-input"
-        accept="image/*"
-        style="display: none"
-      />
+      <input type="file" id="img-input" accept="image/*" style="display: none" />
+      <button class="validation" id="start-video">📹 Start Video</button>
     </div>
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -70,12 +48,221 @@
       let isHost = false;
       let conn = null;
       let members = {};
+      let localStream = null;
+      let activeCalls = {};
+      let userPseudo = "";
 
       peer.on("open", (id) => {
         document.getElementById("my-id").textContent = id;
         listRooms();
         setInterval(listRooms, 10000);
       });
+
+      document.getElementById("start-video").onclick = startVideo;
+
+      async function startVideo() {
+        if (!conn && !isHost) {
+          alert("Veuillez rejoindre une room d'abord !");
+          return;
+        }
+
+        try {
+          localStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { width: 640, height: 480 },
+            audio: true 
+          });
+
+          userPseudo = document.getElementById("pseudo").value.trim() || "Anonymous";
+          broadcastPseudo(userPseudo);
+
+          displayOwnVideo(localStream);
+
+          document.getElementById('start-video').textContent = '📹 Video Active';
+          document.getElementById('start-video').disabled = true;
+          document.getElementById('stop-video-btn').style.display = 'block';
+
+          startVideoCalls();
+          addMessage(`🎥 ${userPseudo} a démarré sa webcam`);
+
+        } catch (error) {
+          console.error('Erreur d\'accès à la webcam:', error);
+          alert('Impossible d\'accéder à la webcam. Vérifiez les permissions.');
+        }
+      }
+
+      function broadcastPseudo(pseudo) {
+        const data = { type: "userInfo", pseudo: pseudo, userId: peer.id };
+        
+        if (isHost) {
+          for (let id in members) {
+            members[id].send(data);
+          }
+        } else if (conn) {
+          conn.send(data);
+        }
+      }
+
+      function displayOwnVideo(stream) {
+        const remoteVideosDiv = document.getElementById('remote-videos');
+        const videoContainer = document.createElement('div');
+        videoContainer.className = 'video-container own-video';
+        videoContainer.id = `video-container-${peer.id}`;
+
+        const videoInfo = document.createElement('div');
+        videoInfo.className = 'video-info';
+        videoInfo.textContent = userPseudo + " (You)";
+
+        const videoElement = document.createElement('video');
+        videoElement.id = `video-${peer.id}`;
+        videoElement.className = 'video-stream';
+        videoElement.srcObject = stream;
+        videoElement.autoplay = true;
+        videoElement.playsInline = true;
+        videoElement.muted = true;
+
+        videoContainer.appendChild(videoInfo);
+        videoContainer.appendChild(videoElement);
+        remoteVideosDiv.appendChild(videoContainer);
+
+        document.getElementById('remote-videos-container').style.display = 'block';
+      }
+
+      function stopVideo() {
+        if (localStream) {
+          localStream.getTracks().forEach(track => track.stop());
+          localStream = null;
+        }
+
+        Object.values(activeCalls).forEach(call => {
+          if (call.outgoing) {
+            call.close();
+          }
+        });
+        
+        activeCalls = {};
+
+        removeRemoteVideo(peer.id);
+
+        document.getElementById('start-video').textContent = '📹 Start Video';
+        document.getElementById('start-video').disabled = false;
+        document.getElementById('stop-video-btn').style.display = 'none';
+
+        const pseudo = document.getElementById("pseudo").value.trim() || "Anonymous";
+        addMessage(`🎥 ${pseudo} a arrêté sa webcam`);
+      }
+
+      function startVideoCalls() {
+        if (!localStream) return;
+
+        if (isHost) {
+          for (let memberId in members) {
+            if (memberId !== peer.id) {
+              const call = peer.call(memberId, localStream);
+              call.outgoing = true;
+              setupVideoCall(call, memberId);
+            }
+          }
+        } else if (conn && conn.peer) {
+          const call = peer.call(conn.peer, localStream);
+          call.outgoing = true;
+          setupVideoCall(call, conn.peer);
+        }
+      }
+
+      function setupVideoCall(call, peerId) {
+        activeCalls[peerId] = call;
+        
+        call.on('stream', (remoteStream) => {
+          displayRemoteVideo(remoteStream, peerId);
+        });
+
+        call.on('close', () => {
+          removeRemoteVideo(peerId);
+          delete activeCalls[peerId];
+        });
+
+        call.on('error', (err) => {
+          console.error('Erreur appel vidéo:', err);
+          removeRemoteVideo(peerId);
+          delete activeCalls[peerId];
+        });
+      }
+
+      peer.on('call', (call) => {
+        call.answer(localStream || null);
+        call.outgoing = false;
+        setupVideoCall(call, call.peer);
+      });
+
+      function displayRemoteVideo(remoteStream, peerId) {
+        const existingVideo = document.getElementById(`video-${peerId}`);
+        if (existingVideo) {
+          existingVideo.srcObject = remoteStream;
+          return;
+        }
+
+        const remoteVideosDiv = document.getElementById('remote-videos');
+        const videoContainer = document.createElement('div');
+        videoContainer.className = 'video-container';
+        videoContainer.id = `video-container-${peerId}`;
+
+        const videoInfo = document.createElement('div');
+        videoInfo.className = 'video-info';
+        
+        let memberPseudo = getMemberPseudo(peerId);
+        videoInfo.textContent = memberPseudo;
+
+        const videoElement = document.createElement('video');
+        videoElement.id = `video-${peerId}`;
+        videoElement.className = 'video-stream';
+        videoElement.srcObject = remoteStream;
+        videoElement.autoplay = true;
+        videoElement.playsInline = true;
+
+        videoContainer.appendChild(videoInfo);
+        videoContainer.appendChild(videoElement);
+        remoteVideosDiv.appendChild(videoContainer);
+
+        document.getElementById('remote-videos-container').style.display = 'block';
+      }
+
+      function removeRemoteVideo(peerId) {
+        const videoContainer = document.getElementById(`video-container-${peerId}`);
+        if (videoContainer) {
+          videoContainer.remove();
+        }
+        
+        const remoteVideosDiv = document.getElementById('remote-videos');
+        if (remoteVideosDiv.children.length === 0) {
+          document.getElementById('remote-videos-container').style.display = 'none';
+        }
+      }
+
+      function getMemberPseudo(peerId) {
+        if (peerId === peer.id) {
+          return userPseudo || "You";
+        }
+        
+        if (members[peerId] && members[peerId].pseudo) {
+          return members[peerId].pseudo;
+        }
+        
+        return `User-${peerId.substring(0, 6)}`;
+      }
+
+      function updateVideoPseudo(userId, pseudo) {
+        const videoContainer = document.getElementById(`video-container-${userId}`);
+        if (videoContainer) {
+          const videoInfo = videoContainer.querySelector('.video-info');
+          if (videoInfo) {
+            if (userId === peer.id) {
+              videoInfo.textContent = pseudo + " (You)";
+            } else {
+              videoInfo.textContent = pseudo;
+            }
+          }
+        }
+      }
 
       async function createRoom() {
         isHost = true;
@@ -120,43 +307,56 @@
       peer.on("connection", (c) => {
         if (!isHost) return;
         members[c.peer] = c;
-        addMessage("User joined: " + c.peer);
-        setupHost(c);
-      });
-
-      function setupHost(c) {
-        c.on("data", (data) => {
+        
+        c.on('data', (data) => {
           if (!data) return;
+
+          if (data.type === "userInfo" && data.pseudo) {
+            members[c.peer].pseudo = data.pseudo;
+            updateVideoPseudo(data.userId, data.pseudo);
+          }
 
           if (data.type === "image") {
             addImage(data.pseudo, data.message, data.data);
-          } else {
+          } else if (data.type === "text") {
             addMessage(data.pseudo + " : " + data.message);
           }
 
-          // broadcast à tous sauf l'envoyeur
           for (let id in members) {
             if (id !== c.peer) members[id].send(data);
           }
         });
 
-        c.on("close", () => {
-          delete members[c.peer];
-          addMessage("User left: " + c.peer);
-        });
-      }
+        addMessage("User joined: " + c.peer);
+      });
 
       function setupClient(c) {
-        c.on("open", () => addMessage("Connected to the room!"));
-        c.on("data", (data) => {
+        c.on('open', () => {
+          addMessage("Connected to the room!");
+          const pseudo = document.getElementById("pseudo").value.trim() || "Anonymous";
+          c.send({ type: "userInfo", pseudo: pseudo, userId: peer.id });
+        });
+        
+        c.on('data', (data) => {
           if (!data) return;
+          
+          if (data.type === "userInfo" && data.pseudo) {
+            if (!members) members = {};
+            members[data.userId] = { pseudo: data.pseudo };
+            updateVideoPseudo(data.userId, data.pseudo);
+          }
+          
           if (data.type === "image") {
             addImage(data.pseudo, data.message, data.data);
-          } else {
+          } else if (data.type === "text") {
             addMessage(data.pseudo + " : " + data.message);
           }
         });
-        c.on("close", () => addMessage("DDisconnected from the room"));
+        
+        c.on('close', () => {
+          addMessage("Disconnected from the room");
+          stopVideo();
+        });
       }
 
       document.getElementById("send-btn").onclick = () => {
@@ -232,6 +432,10 @@
         div.appendChild(container);
         div.scrollTop = div.scrollHeight;
       }
+
+      window.addEventListener('beforeunload', () => {
+        stopVideo();
+      });
     </script>
   </body>
 </html>
