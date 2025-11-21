@@ -2,10 +2,10 @@
 
 # Team Members
 
-Brigen BERCAJ
-Yann SADY
-Lilian SCHOTT
-Luc SEILER
+Brigen B
+Yann S
+Lilian S
+Luc S
 
 ## Start the project
 
