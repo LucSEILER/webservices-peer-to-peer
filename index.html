@@ -2,68 +2,124 @@
 <html>
   <head>
     <meta charset="UTF-8" />
-    <title>Chat PeerJS</title>
+    <title>P2P Chat With PeerJS Signaling Server</title>
   </head>
+
   <body>
-    <h2>My ID :</h2>
+    <h2>My ID:</h2>
     <p id="my-id"></p>
 
-    <h3>Connect to an ID :</h3>
-    <input type="text" id="other-id" placeholder="Other's ID" />
-    <button id="connect-btn">Connect</button>
+    <hr />
+
+    <button id="list-rooms-btn">List Rooms</button>
+
+    <h3>Create a Room</h3>
+    <button id="create-room-btn">Create Room</button>
+
+    <h3>Join a Room</h3>
+    <input id="join-room-id" placeholder="Room ID" />
+    <button id="join-room-btn">Join</button>
+
+    <hr />
 
     <h3>Chat</h3>
     <div
       id="messages"
       style="
         border: 1px solid #000;
-        height: 150px;
+        height: 200px;
         overflow: auto;
-        padding: 5px;
+        padding: 6px;
       "
     ></div>
 
-    <input type="text" id="msg" placeholder="Message" />
-    <button id="send-btn">Sen,d</button>
+    <input id="msg" placeholder="Message" />
+    <button id="send-btn">Send</button>
 
+    <!-- PeerJS -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <script>
-      let conn = null;
 
-      const peer = new Peer();
+    <script>
+      const peer = new Peer({
+        host: "localhost",
+        port: 9000,
+        path: "/peerjs",
+      });
+      let isHost = false;
+      let conn = null;
+      let members = {};
 
       peer.on("open", (id) => {
         document.getElementById("my-id").textContent = id;
       });
 
-      peer.on("connection", (c) => {
-        conn = c;
-        setupConnection();
-      });
+      document.getElementById("create-room-btn").onclick = async () => {
+        isHost = true;
+        addMessage("Room created! Share this ID: " + peer.id);
 
-      document.getElementById("connect-btn").onclick = () => {
-        const otherId = document.getElementById("other-id").value;
-        conn = peer.connect(otherId);
-        setupConnection();
+        await fetch("http://localhost:3000/rooms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: peer.id }),
+        });
       };
 
-      function setupConnection() {
-        conn.on("open", () => {
-          addMessage("Connected !");
+      peer.on("connection", (c) => {
+        if (!isHost) return;
+
+        members[c.peer] = c;
+        addMessage("User joined: " + c.peer);
+
+        setupHost(c);
+      });
+
+      function setupHost(c) {
+        c.on("data", (data) => {
+          addMessage(data.from + ": " + data.msg);
+
+          broadcast(c.peer, data.msg);
         });
 
-        conn.on("data", (data) => {
-          addMessage("Le Y: " + data);
+        c.on("close", () => {
+          delete members[c.peer];
+          addMessage("User left: " + c.peer);
+        });
+      }
+
+      function broadcast(senderId, msg) {
+        for (let id in members) {
+          if (id !== senderId) {
+            members[id].send({ from: senderId, msg });
+          }
+        }
+      }
+
+      document.getElementById("join-room-btn").onclick = () => {
+        const hostId = document.getElementById("join-room-id").value;
+        conn = peer.connect(hostId);
+        setupClient(conn);
+      };
+
+      function setupClient(c) {
+        c.on("open", () => addMessage("Connected to room!"));
+
+        c.on("data", (data) => {
+          addMessage(data.from + ": " + data.msg);
         });
       }
 
       document.getElementById("send-btn").onclick = () => {
-        const msg = document.getElementById("msg").value;
-        if (conn && msg.trim() !== "") {
-          conn.send(msg);
-          addMessage("Me: " + msg);
-          document.getElementById("msg").value = "";
+        const text = document.getElementById("msg").value;
+        if (!text.trim()) return;
+
+        if (isHost) {
+          broadcast(peer.id, text);
+        } else if (conn) {
+          conn.send({ from: peer.id, msg: text });
         }
+
+        addMessage("Me: " + text);
+        document.getElementById("msg").value = "";
       };
 
       function addMessage(text) {
@@ -71,6 +127,27 @@
         div.innerHTML += text + "<br>";
         div.scrollTop = div.scrollHeight;
       }
+
+      async function listRooms() {
+        const res = await fetch("http://localhost:3000/rooms");
+        const rooms = await res.json();
+
+        console.log("Rooms:", rooms);
+        // let msg = "Rooms actives:\n";
+        // rooms.forEach((r, i) => (msg += `${i + 1}. ${r.name} (ID: ${r.id})\n`));
+        // const choice = prompt(
+        //   msg + "\nTapez le numéro de la room à rejoindre :"
+        // );
+        // if (!choice) return;
+
+        // const room = rooms[parseInt(choice) - 1];
+        // if (!room) return;
+
+        // conn = peer.connect(room.id);
+        // setupClient(conn);
+      }
+
+      document.getElementById("list-rooms-btn").onclick = listRooms;
     </script>
   </body>
 </html>
