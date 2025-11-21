@@ -28,6 +28,10 @@
     <input type="text" id="msg" placeholder="Message *" required/>
     <button id="send-btn">Send</button>
 
+    <!-- AJOUT : bouton pour envoyer une image -->
+    <button id="send-img-btn">📷 Image</button>
+    <input type="file" id="img-input" accept="image/*" style="display:none">
+
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script>
       let conn = null;
@@ -55,28 +59,74 @@
         });
 
         conn.on("data", (data) => {
-          console.log(data)
-          addMessage(data.pseudo + " : "+ data.message);
+          if (data.type === "image") {
+            addImage(data.pseudo, data.data);
+          } else {
+            addMessage(data.pseudo + " : " + data.message);
+          }
         });
       }
 
+      // Envoi d’un message texte
       document.getElementById("send-btn").onclick = () => {
-        const pseudo= document.getElementById("pseudo").value;
-        console.log(pseudo)
+        const pseudo = document.getElementById("pseudo").value;
         const msg = document.getElementById("msg").value;
+
         if (conn && msg.trim() !== "" && pseudo.trim() !== "") {
           conn.send({
-            pseudo :pseudo,
-            message : msg
+            type: "text",
+            pseudo: pseudo,
+            message: msg
           });
-          addMessage(pseudo + " : "+ msg);
+          addMessage(pseudo + " : " + msg);
           document.getElementById("msg").value = "";
         }
       };
 
+      // --- Envoi d’une image ---
+      const imgInput = document.getElementById("img-input");
+      document.getElementById("send-img-btn").onclick = () => imgInput.click();
+
+      imgInput.onchange = () => {
+        const file = imgInput.files[0];
+        if (!file || !conn) return;
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          const pseudo = document.getElementById("pseudo").value;
+
+          conn.send({
+            type: "image",
+            pseudo: pseudo,
+            data: reader.result
+          });
+
+          addImage(pseudo, reader.result);
+        };
+        reader.readAsDataURL(file);
+      };
+
+      // Affichage message texte
       function addMessage(text) {
         const div = document.getElementById("messages");
         div.innerHTML += text + "<br>";
+        div.scrollTop = div.scrollHeight;
+      }
+
+      // Affichage image
+      function addImage(pseudo, base64) {
+        const div = document.getElementById("messages");
+
+        div.innerHTML += "<b>" + pseudo + " :</b><br>";
+
+        const img = document.createElement("img");
+        img.src = base64;
+        img.style.maxWidth = "100%";
+        img.style.maxHeight = "120px";
+        img.style.marginBottom = "10px";
+        div.appendChild(img);
+        div.appendChild(document.createElement("br"));
+
         div.scrollTop = div.scrollHeight;
       }
     </script>
