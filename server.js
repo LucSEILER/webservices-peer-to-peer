@@ -7,23 +7,13 @@ app.use(express.json());
 
 let rooms = [];
 
-// app.post("/rooms", (req, res) => {
-//   const { id, name } = req.body;
-//   if (!id || !name) return res.status(400).send("Missing id or name");
-
-//   rooms = rooms.filter((r) => r.id !== id);
-
-//   rooms.push({ id, name, timestamp: Date.now() });
-//   res.send({ success: true });
-// });
-
 app.post("/rooms", (req, res) => {
-  const { id } = req.body;
-  if (!id) return res.status(400).send("Missing id");
+  const { id, name } = req.body;
+  if (!id || !name) return res.status(400).send("Missing id or name");
 
   rooms = rooms.filter((r) => r.id !== id);
 
-  rooms.push({ id, timestamp: Date.now() });
+  rooms.push({ id, name, timestamp: Date.now() });
   res.send({ success: true });
 });
 
