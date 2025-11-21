@@ -17,6 +17,10 @@
 
       <hr />
 
+      <label>Choose your pseudo: </label><input type="text" id="pseudo" placeholder="Pseudo *" required />
+
+      <hr />
+
       <h3>Rooms</h3>
       <div id="room-list">Loading rooms...</div>
       <button class="validation" onclick="createRoom()">Generate a room</button>
@@ -26,22 +30,26 @@
       <h3>Live Chat</h3>
       <div id="messages"></div>
 
+      <h3>Send Room Message</h3>
       <div id="chat-form">
-        <div class="inputs">
-          <input type="text" id="pseudo" placeholder="Pseudo *" required />
-          <input type="text" id="msg" placeholder="Message *" required />
-        </div>
-        <div class="action-buttons">
-          <button class="validation" id="send-btn">Send</button>
-          <button class="validation" id="send-img-btn">📷 Image</button>
-          <input
-            type="file"
-            id="img-input"
-            accept="image/*"
-            style="display: none"
-          />
-        </div>
+      <div class="inputs">
+        <input type="text" id="msg" placeholder="Message *" required />
       </div>
+      <button class="validation" id="send-btn">Send</button>
+      <button class="validation" id="send-img-btn">📷 Image</button>
+      <input
+        type="file"
+        id="img-input"
+        accept="image/*"
+        style="display: none"
+      />
+      </div>
+
+      <h3>Send Private Message</h3>
+      <input type="text" id="pm-user-id" placeholder="User ID *" />
+      <input type="text" id="pm-msg" placeholder="Message *" />
+      <button class="validation" onclick="sendPM()">Send PM</button>
+      <button class="validation" onclick="sendPImages()">📷 Image</button>
     </div>
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -211,6 +219,139 @@
         const img = document.createElement("img");
         img.src = base64;
         container.appendChild(img);
+        div.appendChild(container);
+        div.scrollTop = div.scrollHeight;
+      }
+
+      let pmConnections = {};
+
+      function sendPM() {
+        const pseudo = document.getElementById("pseudo").value.trim();
+        const targetId = document.getElementById("pm-user-id").value.trim();
+        const message = document.getElementById("pm-msg").value.trim();
+
+        if (!pseudo || !targetId || !message) {
+          alert("Pseudo, User ID et message sont obligatoires");
+          return;
+        }
+
+        let pmConn = pmConnections[targetId];
+
+        if (!pmConn) {
+          pmConn = peer.connect(targetId);
+          pmConnections[targetId] = pmConn;
+
+          pmConn.on("open", () => {
+            pmConn.send({ type: "pm", pseudo, message });
+            addMessage("[Private] " + pseudo + " : " + message);
+          });
+
+          pmConn.on("data", (data) => {
+            if (data.type === "pm") {
+              addMessage("[Private] " + data.pseudo + " : " + data.message);
+            }
+          });
+
+          pmConn.on("close", () => {
+            delete pmConnections[targetId];
+          });
+
+        } else {
+          pmConn.send({ type: "pm", pseudo, message });
+          addMessage("[Private] " + pseudo + " : " + message);
+        }
+
+        document.getElementById("pm-msg").value = "";
+      }
+
+      peer.on("connection", (c) => {
+        c.on("data", (data) => {
+          if (data.type === "pm") {
+            addMessage("[Private] " + data.pseudo + " : " + data.message);
+          }
+          if (data.type === "pm-image") {
+            addPrivateImage(data.pseudo, data.message, data.data);
+          }
+        });
+      });
+
+      function sendPImages() {
+        const pseudo = document.getElementById("pseudo").value.trim();
+        const targetId = document.getElementById("pm-user-id").value.trim();
+        const message = document.getElementById("pm-msg").value.trim();
+
+        if (!pseudo || !targetId) {
+          alert("Pseudo et User ID sont obligatoires");
+          return;
+        }
+
+        const fileInput = document.createElement("input");
+        fileInput.type = "file";
+        fileInput.accept = "image/*";
+
+        fileInput.onchange = () => {
+          const file = fileInput.files[0];
+          if (!file) return;
+
+          const reader = new FileReader();
+          reader.onload = () => {
+            const base64 = reader.result;
+
+            const data = {
+              type: "pm-image",
+              pseudo,
+              message,
+              data: base64
+            };
+
+            let pmConn = pmConnections[targetId];
+
+            if (!pmConn) {
+              pmConn = peer.connect(targetId);
+              pmConnections[targetId] = pmConn;
+
+              pmConn.on("open", () => {
+                pmConn.send(data);
+                addPrivateImage(pseudo, message, base64);
+              });
+
+              pmConn.on("data", (data) => {
+                if (data.type === "pm-image") {
+                  addPrivateImage(data.pseudo, data.message, data.data);
+                }
+              });
+
+              pmConn.on("close", () => {
+                delete pmConnections[targetId];
+              });
+
+            } else {
+              pmConn.send(data);
+              addPrivateImage(pseudo, message, base64);
+            }
+          };
+
+          reader.readAsDataURL(file);
+        };
+
+        fileInput.click();
+      }
+
+      function addPrivateImage(pseudo, message, base64) {
+        const div = document.getElementById("messages");
+
+        const container = document.createElement("div");
+        container.style.marginBottom = "10px";
+
+        if (message)
+          container.innerHTML = "[Private] " + pseudo + " : " + message + "<br>";
+        else
+          container.innerHTML = "[Private] " + pseudo + " :<br>";
+
+        const img = document.createElement("img");
+        img.src = base64;
+        container.appendChild(img);
+
         div.appendChild(container);
         div.scrollTop = div.scrollHeight;
       }
