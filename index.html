@@ -34,14 +34,14 @@
 
     <hr />
 
-    <button id="list-rooms-btn">List Rooms</button>
+    <button id="list-rooms-btn" onclick="listRooms()">List Rooms</button>
 
     <h3>Create a Room</h3>
-    <button id="create-room-btn">Create Room</button>
+    <button id="create-room-btn" onclick="createRoom()">Create Room</button>
 
     <h3>Join a Room</h3>
     <input id="join-room-id" placeholder="Room ID" />
-    <button id="join-room-btn">Join</button>
+    <button id="join-room-btn" onclick="join()">Join</button>
 
     <hr />
 
@@ -65,7 +65,7 @@
         document.getElementById("my-id").textContent = id;
       });
 
-      document.getElementById("create-room-btn").onclick = async () => {
+      async function createRoom() {
         isHost = true;
         const roomName = prompt("Nom de la room ?");
         addMessage("Room created! Share this ID: " + peer.id);
@@ -73,34 +73,22 @@
         await fetch("http://localhost:3000/rooms", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: peer.id, name: roomName }),
+          body: JSON.stringify({ id: peer.id }),
         });
-      };
+      }
 
-      // --- Join Room ---
-      document.getElementById("join-room-btn").onclick = () => {
+      function join() {
         const hostId = document.getElementById("join-room-id").value.trim();
         if (!hostId) return;
         conn = peer.connect(hostId);
         setupClient(conn);
-      };
+      }
 
-      // --- List Rooms ---
-      document.getElementById("list-rooms-btn").onclick = async () => {
+      async function listRooms() {
         const res = await fetch("http://localhost:3000/rooms");
         const rooms = await res.json();
         console.log(rooms);
-        // if (rooms.length === 0) return alert("Aucune room active");
-
-        // let msg = "Rooms actives:\n";
-        // rooms.forEach((r,i)=> msg += `${i+1}. ${r.name} (ID: ${r.id})\n`);
-        // const choice = prompt(msg + "\nTapez le numéro de la room à rejoindre :");
-        // if (!choice) return;
-        // const room = rooms[parseInt(choice)-1];
-        // if (!room) return;
-        // conn = peer.connect(room.id);
-        // setupClient(conn);
-      };
+      }
 
       peer.on("connection", (c) => {
         if (!isHost) return;
@@ -208,8 +196,7 @@
         const div = document.getElementById("messages");
         const container = document.createElement("div");
         container.style.marginBottom = "10px";
-        if (message)
-          container.innerHTML = pseudo + " : " + message + "<br>";
+        if (message) container.innerHTML = pseudo + " : " + message + "<br>";
         else container.innerHTML = pseudo + " :<br>";
 
         const img = document.createElement("img");
