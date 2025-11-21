@@ -5,12 +5,17 @@
     <title>Chat PeerJS</title>
   </head>
   <body>
-    <h2>My ID :</h2>
-    <p id="my-id"></p>
+    <button id="create-room">Create room</button>
+    <div id="id-display" style="display: none;">
+      <h2>ROOM ID :</h2>
+      <p id="my-id"></p>
+    </div>
 
-    <h3>Connect to an ID :</h3>
-    <input type="text" id="other-id" placeholder="Other's ID" />
-    <button id="connect-btn">Connect</button>
+    <div id="room-display">
+      <h3>Connect to a room:</h3>
+      <input type="text" id="room-id" placeholder="3cbd037b-75..." />
+      <button id="connect-btn">Connect</button>
+    </div>
 
     <h3>Chat</h3>
     <div
@@ -24,11 +29,15 @@
     ></div>
 
     <input type="text" id="msg" placeholder="Message" />
-    <button id="send-btn">Sen,d</button>
+    <button id="send-btn">Send</button>
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script>
-      let conn = null;
+      let roomActive = false;
+      let activeConnection = null;
+      const connections = new Map();
+      const users = new Set();
+      const messageHistory = [];
 
       const peer = new Peer();
 
@@ -36,35 +45,166 @@
         document.getElementById("my-id").textContent = id;
       });
 
-      peer.on("connection", (c) => {
-        conn = c;
-        setupConnection();
+      peer.on("connection", (incoming) => {
+        if (!roomActive) {
+          incoming.close();
+          return;
+        }
+        setupHostConnection(incoming);
       });
 
-      document.getElementById("connect-btn").onclick = () => {
-        const otherId = document.getElementById("other-id").value;
-        conn = peer.connect(otherId);
-        setupConnection();
+      document.getElementById("create-room").onclick = () => {
+        if (!roomActive) {
+          roomActive = true;
+          document.getElementById("id-display").style.display = "block";
+          const createBtn = document.getElementById("create-room");
+          createBtn.textContent = "Delete room";
+          document.getElementById("room-display").style.display = "none";
+        } else {
+          roomActive = false;
+          document.getElementById("id-display").style.display = "none";
+          const createBtn = document.getElementById("create-room");
+          createBtn.textContent = "Create room";
+          connections.forEach((connection) => connection.close());
+          connections.clear();
+          users.clear();
+          location.reload();
+        }
       };
 
-      function setupConnection() {
-        conn.on("open", () => {
-          addMessage("Connected !");
+      document.getElementById("connect-btn").onclick = () => {
+        const otherId = document.getElementById("room-id").value.trim();
+        if (!otherId) {
+          addSystemMessage("Merci d'indiquer un identifiant de room.");
+          return;
+        }
+        activeConnection = peer.connect(otherId);
+        setupClientConnection(activeConnection);
+      };
+
+      document.getElementById("send-btn").onclick = () => {
+        const msgInput = document.getElementById("msg");
+        const msg = msgInput.value.trim();
+        if (!msg) {
+          return;
+        }
+
+        if (roomActive) {
+          sendMessageAsHost(msg);
+        } else if (activeConnection && activeConnection.open) {
+          sendMessageAsClient(msg);
+        } else {
+          addSystemMessage("Aucune connexion active.");
+        }
+
+        msgInput.value = "";
+      };
+
+      function setupHostConnection(connection) {
+        connections.set(connection.peer, connection);
+        connection.on("open", () => {
+          users.add(connection.peer);
+          addSystemMessage(`Utilisateur ${connection.peer} a rejoint la room.`);
+          connection.send({ type: "history", messages: messageHistory });
+        });
+        connection.on("data", (payload) => handleHostPayload(connection.peer, payload));
+        connection.on("close", () => handleDisconnect(connection.peer));
+        connection.on("error", () => handleDisconnect(connection.peer));
+      }
+
+      function setupClientConnection(connection) {
+        connection.on("open", () => {
+          addSystemMessage("Connecté à la room !");
         });
 
-        conn.on("data", (data) => {
-          addMessage("Le Y: " + data);
+        connection.on("data", (payload) => {
+          if (!payload) {
+            return;
+          }
+
+          if (payload.type === "history" && Array.isArray(payload.messages)) {
+            payload.messages.forEach((message) => {
+              messageHistory.push(message);
+              addMessage(formatMessage(message));
+            });
+          }
+
+          if (payload.type === "message" && payload.message) {
+            messageHistory.push(payload.message);
+            addMessage(formatMessage(payload.message));
+          }
+        });
+
+        connection.on("close", () => {
+          addSystemMessage("Déconnecté de la room.");
+          activeConnection = null;
+        });
+
+        connection.on("error", () => {
+          addSystemMessage("Erreur de connexion.");
         });
       }
 
-      document.getElementById("send-btn").onclick = () => {
-        const msg = document.getElementById("msg").value;
-        if (conn && msg.trim() !== "") {
-          conn.send(msg);
-          addMessage("Me: " + msg);
-          document.getElementById("msg").value = "";
+      function handleHostPayload(senderId, payload) {
+        if (!payload || payload.type !== "message") {
+          return;
         }
-      };
+
+        const message = buildMessage(payload.text || "", payload.senderId || senderId);
+        storeAndDisplayMessage(message);
+        broadcastMessage(message, senderId);
+      }
+
+      function handleDisconnect(peerId) {
+        users.delete(peerId);
+        const connection = connections.get(peerId);
+        if (connection) {
+          connection.close();
+        }
+        connections.delete(peerId);
+        addSystemMessage(`Utilisateur ${peerId} s'est déconnecté.`);
+      }
+
+      function sendMessageAsHost(text) {
+        const message = buildMessage(text, peer.id);
+        storeAndDisplayMessage(message);
+        broadcastMessage(message);
+      }
+
+      function sendMessageAsClient(text) {
+        addMessage("Me: " + text);
+        activeConnection.send({ type: "message", text, senderId: peer.id });
+      }
+
+      function broadcastMessage(message, excludePeerId) {
+        connections.forEach((connection, peerId) => {
+          if (connection.open && peerId !== excludePeerId) {
+            connection.send({ type: "message", message });
+          }
+        });
+      }
+
+      function storeAndDisplayMessage(message) {
+        messageHistory.push(message);
+        addMessage(formatMessage(message));
+      }
+
+      function buildMessage(text, senderId) {
+        return {
+          senderId,
+          text,
+          timestamp: Date.now(),
+        };
+      }
+
+      function formatMessage(message) {
+        const senderLabel = message.senderId === peer.id ? "Me" : message.senderId;
+        return `${senderLabel}: ${message.text}`;
+      }
+
+      function addSystemMessage(text) {
+        addMessage(`[SYSTEM] ${text}`);
+      }
 
       function addMessage(text) {
         const div = document.getElementById("messages");
