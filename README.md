@@ -1,5 +1,12 @@
 # peer to peer chat
 
+# Team Members
+
+Brigen BERCAJ
+Yann SADY
+Lilian SCHOTT
+Luc SEILER
+
 ## Start the project
 
 - `npm install`
